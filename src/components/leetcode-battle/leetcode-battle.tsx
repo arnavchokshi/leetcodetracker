@@ -6,6 +6,8 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { database } from "@/lib/firebase"
+import { ref, onValue, set, push, off } from "firebase/database"
 
 interface PlayerState {
   isRunning: boolean
@@ -58,6 +60,7 @@ export default function LeetCodeBattle() {
 
   const [showRewards, setShowRewards] = useState(false)
   const [redeemMessage, setRedeemMessage] = useState("")
+  const [currentPlayer, setCurrentPlayer] = useState<"arnav" | "meera" | null>(null)
 
   // Load from localStorage on mount
   useEffect(() => {
@@ -83,6 +86,29 @@ export default function LeetCodeBattle() {
     )
   }, [gameState.points, gameState.redeemedRewards])
 
+  // Listen for real-time updates from Firebase
+  useEffect(() => {
+    const gameRef = ref(database, 'game')
+    
+    const unsubscribe = onValue(gameRef, (snapshot) => {
+      const data = snapshot.val()
+      if (data) {
+        setGameState(prev => ({
+          ...prev,
+          arnav: data.arnav || prev.arnav,
+          meera: data.meera || prev.meera,
+          winner: data.winner || null,
+          showWinner: data.showWinner || false,
+        }))
+      }
+    })
+
+    return () => {
+      off(gameRef)
+      unsubscribe()
+    }
+  }, [])
+
   // Check for winner when both timers are stopped
   useEffect(() => {
     if (gameState.arnav.finalTime !== null && gameState.meera.finalTime !== null && !gameState.showWinner) {
@@ -100,39 +126,59 @@ export default function LeetCodeBattle() {
   }, [gameState.arnav.finalTime, gameState.meera.finalTime, gameState.showWinner])
 
   const startTimer = (player: "arnav" | "meera") => {
+    const newState = {
+      ...gameState[player],
+      isRunning: true,
+      startTime: Date.now(),
+      endTime: null,
+      finalTime: null,
+    }
+    
+    // Update local state
     setGameState((prev) => ({
       ...prev,
-      [player]: {
-        ...prev[player],
-        isRunning: true,
-        startTime: Date.now(),
-        endTime: null,
-        finalTime: null,
-      },
+      [player]: newState,
     }))
+    
+    // Update Firebase
+    set(ref(database, `game/${player}`), newState)
   }
 
   const stopTimer = (player: "arnav" | "meera") => {
     const endTime = Date.now()
+    const newState = {
+      ...gameState[player],
+      isRunning: false,
+      endTime,
+      finalTime: gameState[player].startTime ? endTime - gameState[player].startTime : null,
+    }
+    
+    // Update local state
     setGameState((prev) => ({
       ...prev,
-      [player]: {
-        ...prev[player],
-        isRunning: false,
-        endTime,
-        finalTime: prev[player].startTime ? endTime - prev[player].startTime : null,
-      },
+      [player]: newState,
     }))
+    
+    // Update Firebase
+    set(ref(database, `game/${player}`), newState)
   }
 
   const resetRound = () => {
-    setGameState((prev) => ({
-      ...prev,
+    const resetState = {
       arnav: { isRunning: false, startTime: null, endTime: null, finalTime: null },
       meera: { isRunning: false, startTime: null, endTime: null, finalTime: null },
       winner: null,
       showWinner: false,
+    }
+    
+    // Update local state
+    setGameState((prev) => ({
+      ...prev,
+      ...resetState,
     }))
+    
+    // Update Firebase
+    set(ref(database, 'game'), resetState)
   }
 
   const redeemReward = (reward: Reward, player: "arnav" | "meera") => {
@@ -203,24 +249,58 @@ export default function LeetCodeBattle() {
           <div className="flex gap-2">
             <Button
               onClick={() => startTimer(player)}
-              disabled={playerState.isRunning || playerState.finalTime !== null}
+              disabled={playerState.isRunning || playerState.finalTime !== null || currentPlayer !== player}
               className="flex-1"
               variant={playerState.isRunning ? "secondary" : "default"}
             >
               <Clock className="w-4 h-4 mr-2" />
-              Start
+              {currentPlayer === player ? "Start" : "Waiting..."}
             </Button>
             <Button
               onClick={() => stopTimer(player)}
-              disabled={!playerState.isRunning}
+              disabled={!playerState.isRunning || currentPlayer !== player}
               variant="outline"
               className="flex-1"
             >
-              Stop
+              {currentPlayer === player ? "Stop" : "Waiting..."}
             </Button>
           </div>
         </CardContent>
       </Card>
+    )
+  }
+
+  // Player selection dialog
+  if (!currentPlayer) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-pink-50 p-4 flex items-center justify-center">
+        <Card className="max-w-md w-full">
+          <CardHeader>
+            <CardTitle className="text-center">Choose Your Player</CardTitle>
+            <CardDescription className="text-center">
+              Select which player you are to enable real-time synchronization
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <Button 
+              onClick={() => setCurrentPlayer("arnav")} 
+              className="w-full h-16 text-lg"
+              variant="outline"
+            >
+              <Crown className="w-6 h-6 mr-3 text-blue-500" />
+              I'm Arnav
+            </Button>
+            <Button 
+              onClick={() => setCurrentPlayer("meera")} 
+              className="w-full h-16 text-lg"
+              variant="outline"
+            >
+              <Crown className="w-6 h-6 mr-3 text-pink-500" />
+              I'm Meera
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
     )
   }
 
@@ -233,6 +313,18 @@ export default function LeetCodeBattle() {
             LeetCode Battle Arena
           </h1>
           <p className="text-muted-foreground">Arnav vs Meera • May the fastest coder win!</p>
+          <div className="flex justify-center gap-4">
+            <Badge variant="secondary" className="text-sm">
+              You are: {currentPlayer.charAt(0).toUpperCase() + currentPlayer.slice(1)}
+            </Badge>
+            <Button 
+              variant="outline" 
+              size="sm"
+              onClick={() => setCurrentPlayer(null)}
+            >
+              Change Player
+            </Button>
+          </div>
         </div>
 
         {/* Winner Announcement */}
