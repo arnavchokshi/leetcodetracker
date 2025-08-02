@@ -1,0 +1,355 @@
+"use client"
+
+import { useState, useEffect } from "react"
+import { Trophy, Clock, Gift, Zap, Crown } from "lucide-react"
+import { Button } from "@/components/ui/button"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Badge } from "@/components/ui/badge"
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+
+interface PlayerState {
+  isRunning: boolean
+  startTime: number | null
+  endTime: number | null
+  finalTime: number | null
+}
+
+interface GameState {
+  arnav: PlayerState
+  meera: PlayerState
+  points: {
+    arnav: number
+    meera: number
+  }
+  winner: string | null
+  showWinner: boolean
+  redeemedRewards: {
+    arnav: string[]
+    meera: string[]
+  }
+}
+
+interface Reward {
+  id: string
+  name: string
+  cost: number
+  icon: string
+  description: string
+}
+
+const REWARDS: Reward[] = [
+  { id: "dinner", name: "Pick Dinner", cost: 3, icon: "🍽️", description: "Choose what we eat tonight" },
+  { id: "massage", name: "Get a Massage", cost: 5, icon: "💆", description: "15-minute shoulder massage" },
+  { id: "netflix", name: "Netflix Pick", cost: 2, icon: "📺", description: "Choose the next show/movie" },
+  { id: "coffee", name: "Free Coffee", cost: 1, icon: "☕", description: "Other person buys your coffee" },
+  { id: "chores", name: "Skip Chores", cost: 4, icon: "🧹", description: "Skip your turn doing dishes" },
+  { id: "music", name: "Music Control", cost: 2, icon: "🎵", description: "Control playlist for the day" },
+]
+
+export default function LeetCodeBattle() {
+  const [gameState, setGameState] = useState<GameState>({
+    arnav: { isRunning: false, startTime: null, endTime: null, finalTime: null },
+    meera: { isRunning: false, startTime: null, endTime: null, finalTime: null },
+    points: { arnav: 0, meera: 0 },
+    winner: null,
+    showWinner: false,
+    redeemedRewards: { arnav: [], meera: [] },
+  })
+
+  const [showRewards, setShowRewards] = useState(false)
+  const [redeemMessage, setRedeemMessage] = useState("")
+
+  // Load from localStorage on mount
+  useEffect(() => {
+    const saved = localStorage.getItem("leetcode-battle")
+    if (saved) {
+      const parsed = JSON.parse(saved)
+      setGameState((prev) => ({
+        ...prev,
+        points: parsed.points || { arnav: 0, meera: 0 },
+        redeemedRewards: parsed.redeemedRewards || { arnav: [], meera: [] },
+      }))
+    }
+  }, [])
+
+  // Save to localStorage whenever points or redeemed rewards change
+  useEffect(() => {
+    localStorage.setItem(
+      "leetcode-battle",
+      JSON.stringify({
+        points: gameState.points,
+        redeemedRewards: gameState.redeemedRewards,
+      }),
+    )
+  }, [gameState.points, gameState.redeemedRewards])
+
+  // Check for winner when both timers are stopped
+  useEffect(() => {
+    if (gameState.arnav.finalTime !== null && gameState.meera.finalTime !== null && !gameState.showWinner) {
+      const winner = gameState.arnav.finalTime < gameState.meera.finalTime ? "arnav" : "meera"
+      setGameState((prev) => ({
+        ...prev,
+        winner,
+        showWinner: true,
+        points: {
+          ...prev.points,
+          [winner]: prev.points[winner] + 1,
+        },
+      }))
+    }
+  }, [gameState.arnav.finalTime, gameState.meera.finalTime, gameState.showWinner])
+
+  const startTimer = (player: "arnav" | "meera") => {
+    setGameState((prev) => ({
+      ...prev,
+      [player]: {
+        ...prev[player],
+        isRunning: true,
+        startTime: Date.now(),
+        endTime: null,
+        finalTime: null,
+      },
+    }))
+  }
+
+  const stopTimer = (player: "arnav" | "meera") => {
+    const endTime = Date.now()
+    setGameState((prev) => ({
+      ...prev,
+      [player]: {
+        ...prev[player],
+        isRunning: false,
+        endTime,
+        finalTime: prev[player].startTime ? endTime - prev[player].startTime : null,
+      },
+    }))
+  }
+
+  const resetRound = () => {
+    setGameState((prev) => ({
+      ...prev,
+      arnav: { isRunning: false, startTime: null, endTime: null, finalTime: null },
+      meera: { isRunning: false, startTime: null, endTime: null, finalTime: null },
+      winner: null,
+      showWinner: false,
+    }))
+  }
+
+  const redeemReward = (reward: Reward, player: "arnav" | "meera") => {
+    if (gameState.points[player] >= reward.cost) {
+      setGameState((prev) => ({
+        ...prev,
+        points: {
+          ...prev.points,
+          [player]: prev.points[player] - reward.cost,
+        },
+        redeemedRewards: {
+          ...prev.redeemedRewards,
+          [player]: [...prev.redeemedRewards[player], reward.id],
+        },
+      }))
+      setRedeemMessage(`${player.charAt(0).toUpperCase() + player.slice(1)} redeemed: ${reward.name}!`)
+      setTimeout(() => setRedeemMessage(""), 3000)
+    }
+  }
+
+  const formatTime = (ms: number | null) => {
+    if (!ms) return "00:00"
+    const minutes = Math.floor(ms / 60000)
+    const seconds = Math.floor((ms % 60000) / 1000)
+    return `${minutes.toString().padStart(2, "0")}:${seconds.toString().padStart(2, "0")}`
+  }
+
+  const PlayerTimer = ({ player, name }: { player: "arnav" | "meera"; name: string }) => {
+    const playerState = gameState[player]
+    const [currentTime, setCurrentTime] = useState(0)
+
+    useEffect(() => {
+      let interval: NodeJS.Timeout
+      if (playerState.isRunning && playerState.startTime) {
+        interval = setInterval(() => {
+          setCurrentTime(Date.now() - playerState.startTime!)
+        }, 100)
+      }
+      return () => clearInterval(interval)
+    }, [playerState.isRunning, playerState.startTime])
+
+    const displayTime = playerState.finalTime || currentTime
+
+    return (
+      <Card className={`relative overflow-hidden ${playerState.isRunning ? "ring-2 ring-blue-500 ring-pulse" : ""}`}>
+        <CardHeader className="pb-3">
+          <CardTitle className="flex items-center gap-2">
+            <Crown className={`w-5 h-5 ${player === "arnav" ? "text-blue-500" : "text-pink-500"}`} />
+            {name}
+          </CardTitle>
+          <CardDescription>
+            Points: <Badge variant="secondary">{gameState.points[player]}</Badge>
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="text-center">
+            <div
+              className={`text-4xl font-mono font-bold ${playerState.isRunning ? "text-blue-600" : "text-gray-700"}`}
+            >
+              {formatTime(displayTime)}
+            </div>
+            {playerState.finalTime && (
+              <div className="text-sm text-muted-foreground mt-1">
+                Final: {(playerState.finalTime / 1000).toFixed(2)}s
+              </div>
+            )}
+          </div>
+          <div className="flex gap-2">
+            <Button
+              onClick={() => startTimer(player)}
+              disabled={playerState.isRunning || playerState.finalTime !== null}
+              className="flex-1"
+              variant={playerState.isRunning ? "secondary" : "default"}
+            >
+              <Clock className="w-4 h-4 mr-2" />
+              Start
+            </Button>
+            <Button
+              onClick={() => stopTimer(player)}
+              disabled={!playerState.isRunning}
+              variant="outline"
+              className="flex-1"
+            >
+              Stop
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+    )
+  }
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-pink-50 p-4">
+      <div className="max-w-4xl mx-auto space-y-6">
+        {/* Header */}
+        <div className="text-center space-y-2">
+          <h1 className="text-4xl font-bold bg-gradient-to-r from-blue-600 to-pink-600 bg-clip-text text-transparent">
+            LeetCode Battle Arena
+          </h1>
+          <p className="text-muted-foreground">Arnav vs Meera • May the fastest coder win!</p>
+        </div>
+
+        {/* Winner Announcement */}
+        {gameState.showWinner && (
+          <Card className="border-yellow-200 bg-yellow-50">
+            <CardContent className="pt-6">
+              <div className="text-center space-y-3">
+                <Trophy className="w-12 h-12 text-yellow-500 mx-auto" />
+                <h2 className="text-2xl font-bold text-yellow-700">
+                  🎉 {gameState.winner ? gameState.winner.charAt(0).toUpperCase() + gameState.winner.slice(1) : ""} Wins! 🎉
+                </h2>
+                <p className="text-yellow-600">
+                  Finished in{" "}
+                  {gameState.winner && formatTime(gameState[gameState.winner as "arnav" | "meera"].finalTime)}
+                </p>
+                <Button onClick={resetRound} className="mt-4">
+                  <Zap className="w-4 h-4 mr-2" />
+                  New Round
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Timers */}
+        <div className="grid md:grid-cols-2 gap-6">
+          <PlayerTimer player="arnav" name="Arnav" />
+          <PlayerTimer player="meera" name="Meera" />
+        </div>
+
+        {/* Controls */}
+        <div className="flex justify-center gap-4">
+          <Button onClick={resetRound} variant="outline">
+            Reset Round
+          </Button>
+          <Button onClick={() => setShowRewards(true)} variant="secondary">
+            <Gift className="w-4 h-4 mr-2" />
+            Reward Store
+          </Button>
+          <Button 
+            onClick={() => {
+              localStorage.removeItem("leetcode-battle")
+              setGameState({
+                arnav: { isRunning: false, startTime: null, endTime: null, finalTime: null },
+                meera: { isRunning: false, startTime: null, endTime: null, finalTime: null },
+                points: { arnav: 0, meera: 0 },
+                winner: null,
+                showWinner: false,
+                redeemedRewards: { arnav: [], meera: [] },
+              })
+            }} 
+            variant="destructive"
+          >
+            Reset All Data
+          </Button>
+        </div>
+
+        {/* Redeem Message */}
+        {redeemMessage && (
+          <Card className="border-green-200 bg-green-50">
+            <CardContent className="pt-6">
+              <p className="text-center text-green-700 font-medium">{redeemMessage}</p>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Reward Store Dialog */}
+        <Dialog open={showRewards} onOpenChange={setShowRewards}>
+          <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <Gift className="w-5 h-5" />
+                Reward Store
+              </DialogTitle>
+              <DialogDescription>Redeem your hard-earned points for awesome rewards!</DialogDescription>
+            </DialogHeader>
+            <div className="grid gap-4 mt-4">
+              {REWARDS.map((reward) => (
+                <Card key={reward.id}>
+                  <CardContent className="pt-4">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <span className="text-2xl">{reward.icon}</span>
+                        <div>
+                          <h3 className="font-semibold">{reward.name}</h3>
+                          <p className="text-sm text-muted-foreground">{reward.description}</p>
+                          <Badge variant="outline" className="mt-1">
+                            {reward.cost} points
+                          </Badge>
+                        </div>
+                      </div>
+                      <div className="flex gap-2">
+                        <Button
+                          size="sm"
+                          onClick={() => redeemReward(reward, "arnav")}
+                          disabled={gameState.points.arnav < reward.cost || gameState.redeemedRewards.arnav.includes(reward.id)}
+                          variant={gameState.redeemedRewards.arnav.includes(reward.id) ? "secondary" : "outline"}
+                        >
+                          {gameState.redeemedRewards.arnav.includes(reward.id) ? "✓ Redeemed" : `Arnav (${gameState.points.arnav})`}
+                        </Button>
+                        <Button
+                          size="sm"
+                          onClick={() => redeemReward(reward, "meera")}
+                          disabled={gameState.points.meera < reward.cost || gameState.redeemedRewards.meera.includes(reward.id)}
+                          variant={gameState.redeemedRewards.meera.includes(reward.id) ? "secondary" : "outline"}
+                        >
+                          {gameState.redeemedRewards.meera.includes(reward.id) ? "✓ Redeemed" : `Meera (${gameState.points.meera})`}
+                        </Button>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          </DialogContent>
+        </Dialog>
+      </div>
+    </div>
+  )
+} 
