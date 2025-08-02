@@ -1,17 +1,15 @@
 import { initializeApp } from 'firebase/app';
 import { getDatabase } from 'firebase/database';
 
-// TODO: Replace with your actual Firebase config
-// Go to https://console.firebase.google.com/
-// Create a new project and get your config
 const firebaseConfig = {
-  apiKey: "YOUR_API_KEY",
-  authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
-  databaseURL: "https://YOUR_PROJECT_ID-default-rtdb.firebaseio.com",
-  projectId: "YOUR_PROJECT_ID",
-  storageBucket: "YOUR_PROJECT_ID.appspot.com",
-  messagingSenderId: "YOUR_SENDER_ID",
-  appId: "YOUR_APP_ID"
+  apiKey: "AIzaSyB5jpXiqYtH8kkRWqG36ufyBX2ebBqsBrE",
+  authDomain: "leetcode-f3f3a.firebaseapp.com",
+  databaseURL: "https://leetcode-f3f3a-default-rtdb.firebaseio.com",
+  projectId: "leetcode-f3f3a",
+  storageBucket: "leetcode-f3f3a.firebasestorage.app",
+  messagingSenderId: "947350011221",
+  appId: "1:947350011221:web:451c0651e1c282afe383dc",
+  measurementId: "G-52R997EVEV"
 };
 
 // Initialize Firebase
