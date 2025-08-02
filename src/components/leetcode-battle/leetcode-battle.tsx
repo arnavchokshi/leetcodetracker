@@ -7,7 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { database } from "@/lib/firebase"
-import { ref, onValue, set, push, off } from "firebase/database"
+import { ref, onValue, set, off } from "firebase/database"
 
 interface PlayerState {
   isRunning: boolean
@@ -134,7 +134,7 @@ export default function LeetCodeBattle() {
         ...winnerState,
       })
     }
-  }, [gameState.arnav.finalTime, gameState.meera.finalTime, gameState.showWinner])
+  }, [gameState.arnav.finalTime, gameState.meera.finalTime, gameState.showWinner, gameState.arnav, gameState.meera, gameState.points])
 
   const startTimer = (player: "arnav" | "meera") => {
     const newState = {
@@ -316,7 +316,7 @@ export default function LeetCodeBattle() {
               variant="outline"
             >
               <Crown className="w-6 h-6 mr-3 text-blue-500" />
-              I'm Arnav
+              I&apos;m Arnav
             </Button>
             <Button 
               onClick={() => setCurrentPlayer("meera")} 
@@ -324,7 +324,7 @@ export default function LeetCodeBattle() {
               variant="outline"
             >
               <Crown className="w-6 h-6 mr-3 text-pink-500" />
-              I'm Meera
+              I&apos;m Meera
             </Button>
           </CardContent>
         </Card>
