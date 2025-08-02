@@ -1,16 +1,14 @@
 "use client"
 
 import { useState, useEffect, useCallback, useRef } from "react"
-import { Trophy, Clock, Gift, Crown, Users, Edit, Trash2, History, Copy, Settings, Zap } from "lucide-react"
+import { Trophy, Clock, Gift, Crown, Users, Edit, Trash2, History, Copy, Settings } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { database } from "@/lib/firebase"
 import { ref, onValue, set, update } from "firebase/database"
 
@@ -102,7 +100,6 @@ export default function LeetCodeBattle() {
   const [showRewards, setShowRewards] = useState(false)
   const [showRewardEditor, setShowRewardEditor] = useState(false)
   const [showBoughtRewards, setShowBoughtRewards] = useState(false)
-  const [editingReward, setEditingReward] = useState<Reward | null>(null)
   const [redeemMessage, setRedeemMessage] = useState("")
   const [isRoundReset, setIsRoundReset] = useState(false)
 
@@ -113,21 +110,20 @@ export default function LeetCodeBattle() {
   const [isInitialized, setIsInitialized] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [sessionId, setSessionId] = useState<string>(Date.now().toString())
   
   // Refs to prevent race conditions
   const isUpdatingRef = useRef(false)
   const lastUpdateRef = useRef<number>(0)
-  const sessionIdRef = useRef<string>(sessionId)
+  const sessionIdRef = useRef<string>(Date.now().toString())
   const isClearingDataRef = useRef(false)
 
   // Update sessionId ref when sessionId changes
   useEffect(() => {
-    sessionIdRef.current = sessionId
-  }, [sessionId])
+    sessionIdRef.current = Date.now().toString()
+  }, [])
 
   // Firebase update function
-  const updateFirebase = useCallback((updates: any) => {
+  const updateFirebase = useCallback((updates: Record<string, unknown>) => {
     if (isUpdatingRef.current) return
     
     isUpdatingRef.current = true
@@ -172,7 +168,7 @@ export default function LeetCodeBattle() {
           // Initialize with default values
           const freshData = {
             room: null,
-            sessionId: sessionId,
+            sessionId: sessionIdRef.current,
             lastReset: Date.now()
           }
           set(ref(database, 'game'), freshData)
@@ -181,7 +177,7 @@ export default function LeetCodeBattle() {
           console.log('Firebase data received:', data)
           
           // Check if this is old data from a previous session
-          const isOldData = !data.sessionId || data.sessionId !== sessionId
+          const isOldData = !data.sessionId || data.sessionId !== sessionIdRef.current
           
           if (isOldData && !isClearingDataRef.current) {
             console.log('Detected old Firebase data, preserving data...')
@@ -189,7 +185,7 @@ export default function LeetCodeBattle() {
             // Preserve room data but update session info
             const preservedData = {
               room: data.room || null,
-              sessionId: sessionId,
+              sessionId: sessionIdRef.current,
               lastReset: Date.now()
             }
             set(ref(database, 'game'), preservedData).then(() => {
@@ -339,7 +335,7 @@ export default function LeetCodeBattle() {
     }, 100)
 
     return () => clearInterval(interval)
-  }, [room, playerStates, playerTimers])
+  }, [room, playerStates])
 
   const generateRoomCode = () => {
     return Math.random().toString(36).substring(2, 8).toUpperCase()
@@ -365,7 +361,7 @@ export default function LeetCodeBattle() {
       matches: [],
       boughtRewards: [],
       createdAt: Date.now(),
-      gameCreator: sessionId,
+      gameCreator: sessionIdRef.current,
       gameStatus: 'waiting',
     }
 
@@ -441,7 +437,7 @@ export default function LeetCodeBattle() {
             matches: [],
             boughtRewards: [],
             createdAt: Date.now(),
-            gameCreator: sessionId,
+            gameCreator: sessionIdRef.current,
             gameStatus: 'waiting',
           }
 
@@ -908,7 +904,7 @@ export default function LeetCodeBattle() {
 
           {/* Player Timers */}
           <div className="grid gap-6" style={{ gridTemplateColumns: `repeat(${room.players.length}, 1fr)` }}>
-            {room.players.map((player, index) => {
+            {room.players.map((player) => {
               const playerState = playerStates[player.id] || {
                 isRunning: false,
                 startTime: null,
