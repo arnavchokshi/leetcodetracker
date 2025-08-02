@@ -1,5 +1,5 @@
 import { initializeApp } from 'firebase/app';
-import { getDatabase } from 'firebase/database';
+import { getDatabase, ref, onValue } from 'firebase/database';
 
 const firebaseConfig = {
   apiKey: "AIzaSyB5jpXiqYtH8kkRWqG36ufyBX2ebBqsBrE",
@@ -14,4 +14,17 @@ const firebaseConfig = {
 
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);
-export const database = getDatabase(app); 
+export const database = getDatabase(app);
+
+// Add error handling for Firebase connection
+if (typeof window !== 'undefined') {
+  // Only run in browser environment
+  const connectedRef = ref(database, '.info/connected');
+  onValue(connectedRef, (snap) => {
+    if (snap.val() === true) {
+      console.log('Connected to Firebase');
+    } else {
+      console.log('Disconnected from Firebase');
+    }
+  });
+} 
