@@ -62,29 +62,24 @@ export default function LeetCodeBattle() {
   const [redeemMessage, setRedeemMessage] = useState("")
   const [currentPlayer, setCurrentPlayer] = useState<"arnav" | "meera" | null>(null)
 
-  // Load from localStorage on mount
+  // Initialize Firebase data if it doesn't exist
   useEffect(() => {
-    const saved = localStorage.getItem("leetcode-battle")
-    if (saved) {
-      const parsed = JSON.parse(saved)
-      setGameState((prev) => ({
-        ...prev,
-        points: parsed.points || { arnav: 0, meera: 0 },
-        redeemedRewards: parsed.redeemedRewards || { arnav: [], meera: [] },
-      }))
-    }
+    const gameRef = ref(database, 'game')
+    onValue(gameRef, (snapshot) => {
+      if (!snapshot.exists()) {
+        // Initialize with default values
+        const initialData = {
+          arnav: { isRunning: false, startTime: null, endTime: null, finalTime: null },
+          meera: { isRunning: false, startTime: null, endTime: null, finalTime: null },
+          points: { arnav: 0, meera: 0 },
+          winner: null,
+          showWinner: false,
+          redeemedRewards: { arnav: [], meera: [] },
+        }
+        set(ref(database, 'game'), initialData)
+      }
+    }, { onlyOnce: true })
   }, [])
-
-  // Save to localStorage whenever points or redeemed rewards change
-  useEffect(() => {
-    localStorage.setItem(
-      "leetcode-battle",
-      JSON.stringify({
-        points: gameState.points,
-        redeemedRewards: gameState.redeemedRewards,
-      }),
-    )
-  }, [gameState.points, gameState.redeemedRewards])
 
   // Listen for real-time updates from Firebase
   useEffect(() => {
@@ -99,6 +94,8 @@ export default function LeetCodeBattle() {
           meera: data.meera || prev.meera,
           winner: data.winner || null,
           showWinner: data.showWinner || false,
+          points: data.points || prev.points,
+          redeemedRewards: data.redeemedRewards || prev.redeemedRewards,
         }))
       }
     })
@@ -113,15 +110,29 @@ export default function LeetCodeBattle() {
   useEffect(() => {
     if (gameState.arnav.finalTime !== null && gameState.meera.finalTime !== null && !gameState.showWinner) {
       const winner = gameState.arnav.finalTime < gameState.meera.finalTime ? "arnav" : "meera"
-      setGameState((prev) => ({
-        ...prev,
+      const newPoints = {
+        ...gameState.points,
+        [winner]: gameState.points[winner] + 1,
+      }
+      
+      const winnerState = {
         winner,
         showWinner: true,
-        points: {
-          ...prev.points,
-          [winner]: prev.points[winner] + 1,
-        },
+        points: newPoints,
+      }
+      
+      // Update local state
+      setGameState((prev) => ({
+        ...prev,
+        ...winnerState,
       }))
+      
+      // Update Firebase
+      set(ref(database, 'game'), {
+        arnav: gameState.arnav,
+        meera: gameState.meera,
+        ...winnerState,
+      })
     }
   }, [gameState.arnav.finalTime, gameState.meera.finalTime, gameState.showWinner])
 
@@ -169,6 +180,8 @@ export default function LeetCodeBattle() {
       meera: { isRunning: false, startTime: null, endTime: null, finalTime: null },
       winner: null,
       showWinner: false,
+      points: gameState.points, // Keep points
+      redeemedRewards: gameState.redeemedRewards, // Keep rewards
     }
     
     // Update local state
@@ -183,17 +196,32 @@ export default function LeetCodeBattle() {
 
   const redeemReward = (reward: Reward, player: "arnav" | "meera") => {
     if (gameState.points[player] >= reward.cost) {
+      const newPoints = {
+        ...gameState.points,
+        [player]: gameState.points[player] - reward.cost,
+      }
+      const newRedeemedRewards = {
+        ...gameState.redeemedRewards,
+        [player]: [...gameState.redeemedRewards[player], reward.id],
+      }
+      
+      // Update local state
       setGameState((prev) => ({
         ...prev,
-        points: {
-          ...prev.points,
-          [player]: prev.points[player] - reward.cost,
-        },
-        redeemedRewards: {
-          ...prev.redeemedRewards,
-          [player]: [...prev.redeemedRewards[player], reward.id],
-        },
+        points: newPoints,
+        redeemedRewards: newRedeemedRewards,
       }))
+      
+      // Update Firebase
+      set(ref(database, 'game'), {
+        arnav: gameState.arnav,
+        meera: gameState.meera,
+        winner: gameState.winner,
+        showWinner: gameState.showWinner,
+        points: newPoints,
+        redeemedRewards: newRedeemedRewards,
+      })
+      
       setRedeemMessage(`${player.charAt(0).toUpperCase() + player.slice(1)} redeemed: ${reward.name}!`)
       setTimeout(() => setRedeemMessage(""), 3000)
     }
@@ -366,15 +394,20 @@ export default function LeetCodeBattle() {
           </Button>
           <Button 
             onClick={() => {
-              localStorage.removeItem("leetcode-battle")
-              setGameState({
+              const resetState = {
                 arnav: { isRunning: false, startTime: null, endTime: null, finalTime: null },
                 meera: { isRunning: false, startTime: null, endTime: null, finalTime: null },
                 points: { arnav: 0, meera: 0 },
                 winner: null,
                 showWinner: false,
                 redeemedRewards: { arnav: [], meera: [] },
-              })
+              }
+              
+              // Update local state
+              setGameState(resetState)
+              
+              // Update Firebase
+              set(ref(database, 'game'), resetState)
             }} 
             variant="destructive"
           >
